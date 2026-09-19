@@ -1,0 +1,12 @@
+boot();startGame(true);
+enterScene('outdoor',{x:25.5,y:38.5},{silent:true});
+DLG.open=false;G.paused=false;
+const P=G.player;
+P.x=15.5;P.y=10.5;P.hidden=false;P.sta=100;P.injured=0;P.crouchLock=false;
+IN.aim=0;IN.lookX=IN.lookY=0;IN.movedByMouse=true;IN.joy.x=0;IN.joy.y=0;
+IN.keys={KeyW:true};
+const sx=P.x,sy=P.y;
+updatePlayer(0.05);
+console.log('one frame: dx',(P.x-sx).toFixed(5),'dy',(P.y-sy).toFixed(5),'aim',IN.aim);
+console.log('walk speed cfg',CFG.walk,'expected step',(CFG.walk*0.05).toFixed(5));
+IN.keys={};

@@ -1,0 +1,10 @@
+global.__dbgMove=o=>console.log('  dbg',JSON.stringify(o));
+boot();startGame(true);
+enterScene('outdoor',{x:25.5,y:38.5},{silent:true});
+DLG.open=false;G.paused=false;
+const P=G.player;P.x=15.5;P.y=10.5;P.hidden=false;
+IN.aim=0;IN.lookX=IN.lookY=0;IN.movedByMouse=true;IN.keys={KeyW:true};
+const sx=P.x,sy=P.y;
+updatePlayer(0.05);
+console.log('dx',(P.x-sx).toFixed(5),'dy',(P.y-sy).toFixed(5));
+IN.keys={};

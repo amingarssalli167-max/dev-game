@@ -212,12 +212,19 @@
                render a static bind-pose copy beside it until skinning is proven.
                MeshBasicMaterial also removes lighting as a possible reason for
                an invisible character. */
-            const staticMat = (sm.material && sm.material.clone)
-              ? sm.material.clone() : new THREE.MeshBasicMaterial({color:0xffffff});
+            /* Use an unlit material for the visibility copy. This guarantees the
+               imported character remains visible even if the scene lights do not
+               illuminate the source PBR material. Keep the source texture when
+               available so this is still the real Alex geometry/appearance. */
+            const sourceMat=sm.material;
+            const staticMat=new THREE.MeshBasicMaterial({
+              color:(sourceMat&&sourceMat.color)?sourceMat.color.clone():new THREE.Color(0xffffff),
+              map:(sourceMat&&sourceMat.map)?sourceMat.map:null,
+              side:THREE.DoubleSide
+            });
             staticMat.transparent=false;
             staticMat.opacity=1;
             staticMat.depthWrite=true;
-            staticMat.side=THREE.DoubleSide;
             staticMat.toneMapped=false;
             const staticMesh=new THREE.Mesh(sm.geometry,staticMat);
             staticMesh.name='Alex_BindPose_Visible';
@@ -298,7 +305,13 @@
       const animations=buildAnimations();
       root.updateMatrixWorld(true);
       root.traverse(function(o){
-        if(o.isMesh){o.frustumCulled=false;o.visible=true;}
+        if(!o.isMesh)return;
+        o.frustumCulled=false;
+        /* The real SkinnedMesh remains loaded and animated, but the safety
+           bind-pose copy is the renderer until custom skinning is proven.
+           Never re-enable the SkinnedMesh here: doing so can depth-occlude the
+           visible bind-pose copy when the imported skin matrices collapse. */
+        o.visible=!o.userData.glbSkinned;
       });
       onLoad({scene:root,scenes:[root],animations:animations,asset:json.asset||{},parser:null});
     }catch(e){console.error('[GLB]',e);if(onError)onError(e);}

@@ -236,11 +236,22 @@
                and attach the copy directly to the GLB root. */
             root.updateMatrixWorld(true);
             sm.updateMatrixWorld(true);
-            staticMesh.matrixAutoUpdate=false;
-            staticMesh.matrix.copy(sm.matrixWorld);
-            staticMesh.matrixWorld.copy(sm.matrixWorld);
+            /* Use a normal transform hierarchy for the frozen copy.
+               Decomposing the bind-pose world matrix is more reliable than
+               manually freezing matrixWorld because the parent GLB root is
+               later scaled/rotated by the gameplay layer. */
+            const frozenPos=new THREE.Vector3();
+            const frozenQuat=new THREE.Quaternion();
+            const frozenScale=new THREE.Vector3();
+            sm.matrixWorld.decompose(frozenPos,frozenQuat,frozenScale);
+            staticMesh.matrixAutoUpdate=true;
+            staticMesh.position.copy(frozenPos);
+            staticMesh.quaternion.copy(frozenQuat);
+            staticMesh.scale.copy(frozenScale);
             sm.visible=false;
             root.add(staticMesh);
+            staticMesh.visible=true;
+            staticMesh.updateMatrixWorld(true);
 
             const testBox=new THREE.Box3().setFromObject(staticMesh);
             const testSize=testBox.getSize(new THREE.Vector3());

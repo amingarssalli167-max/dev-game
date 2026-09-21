@@ -7,8 +7,8 @@
   function compCtor(t){ return t===5121?Uint8Array:t===5123?Uint16Array:t===5125?Uint32Array:t===5126?Float32Array:null; }
   function typeSize(t){ return t==='SCALAR'?1:t==='VEC2'?2:t==='VEC3'?3:t==='VEC4'?4:t==='MAT2'?4:t==='MAT3'?9:t==='MAT4'?16:1; }
   function readAccessor(json,bin,index){
-    const a=json.accessors[index], bv=json.bufferViews[a.bufferView];
-    const C=compCtor(a.componentType); if(!a||!bv||!C) throw new Error('Unsupported glTF accessor '+index);
+    const a=json.accessors[index]; if(!a)throw new Error('Missing glTF accessor '+index); const bv=json.bufferViews[a.bufferView];
+    const C=compCtor(a.componentType); if(!bv||!C) throw new Error('Unsupported glTF accessor '+index);
     const n=typeSize(a.type), count=a.count, itemBytes=n*compSize(a.componentType);
     const stride=bv.byteStride||itemBytes, base=(bv.byteOffset||0)+(a.byteOffset||0);
     const out=new C(count*n);

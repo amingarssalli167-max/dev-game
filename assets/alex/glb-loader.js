@@ -204,22 +204,37 @@
             sm.skeleton.update();
             sm.userData.glbBindMatrix=bindMatrix.clone();
             sm.userData.glbBoneCount=skeleton.bones.length;
-            /* Safety fallback: if skinning collapses the imported geometry,
-               keep an exact bind-pose mesh visible while the real skeleton
-               remains attached for the animation bridge. */
-            const testBox=new THREE.Box3().setFromObject(sm);
+
+            /* VISIBILITY-FIRST SAFETY RENDER:
+               Our lightweight loader must never make a valid GLB disappear just
+               because a custom skin matrix differs from Three.js GLTFLoader.
+               Keep the real SkinnedMesh + Skeleton alive for animation, but
+               render a static bind-pose copy beside it until skinning is proven.
+               MeshBasicMaterial also removes lighting as a possible reason for
+               an invisible character. */
+            const staticMat = (sm.material && sm.material.clone)
+              ? sm.material.clone() : new THREE.MeshBasicMaterial({color:0xffffff});
+            staticMat.transparent=false;
+            staticMat.opacity=1;
+            staticMat.depthWrite=true;
+            staticMat.side=THREE.DoubleSide;
+            staticMat.toneMapped=false;
+            const staticMesh=new THREE.Mesh(sm.geometry,staticMat);
+            staticMesh.name='Alex_BindPose_Visible';
+            staticMesh.castShadow=true;
+            staticMesh.receiveShadow=true;
+            staticMesh.frustumCulled=false;
+            staticMesh.renderOrder=5;
+            staticMesh.userData.alexBindPoseVisible=true;
+            staticMesh.userData.sourceSkinnedMesh=sm;
+            staticMesh.userData.glbNode=i;
+            staticMesh.visible=true;
+            sm.visible=false;
+            nodes[i].add(staticMesh);
+
+            const testBox=new THREE.Box3().setFromObject(staticMesh);
             const testSize=testBox.getSize(new THREE.Vector3());
-            if(!isFinite(testSize.y)||testSize.y<0.01){
-              const fallback=new THREE.Mesh(sm.geometry,sm.material);
-              fallback.name='Alex_BindPose_Fallback';
-              fallback.castShadow=true;fallback.receiveShadow=true;
-              fallback.frustumCulled=false;
-              fallback.userData.alexBindPoseFallback=true;
-              fallback.userData.sourceSkinnedMesh=sm;
-              sm.visible=false;
-              nodes[i].add(fallback);
-              console.warn('[GLB] skin collapsed; using bind-pose visibility fallback');
-            }
+            console.info('[GLB] visible bind-pose mesh',i,'height=',testSize.y,'skinBones=',skeleton.bones.length);
           }
         });
       });

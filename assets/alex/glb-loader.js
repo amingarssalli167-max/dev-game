@@ -103,12 +103,14 @@
     if(prim.indices!==undefined){const a=readAccessor(json,bin,prim.indices);g.setIndex(new THREE.BufferAttribute(indexArray(a),1));}
     g.computeBoundingBox();g.computeBoundingSphere();
     const mat=matFor(json,bin,prim.material,textures);
-    /* Visual-first integration: render the imported bind/A-pose directly.
-       We intentionally do not create a SkinnedMesh yet because this loader is
-       presentation-only; incorrect inverse-bind data can collapse the entire
-       character. Animation will be layered on after the real mesh is visible. */
-    const sm=new THREE.Mesh(g,mat);
+    /* Real glTF skinning: keep JOINTS_0/WEIGHTS_0 on a SkinnedMesh and bind it
+       to the imported bone hierarchy. The gameplay animation layer can now
+       drive the same skeleton instead of a procedural body. */
+    const sm=skinIndex!==undefined
+      ?new THREE.SkinnedMesh(g,mat)
+      :new THREE.Mesh(g,mat);
     sm.userData.glbSkinned=skinIndex!==undefined;
+    sm.userData.glbSkinIndex=skinIndex;
     sm.castShadow=true;sm.receiveShadow=true;
     if(prim.mode!==undefined&&prim.mode!==4)sm.userData.glbPrimitiveMode=prim.mode;
     return sm;
@@ -156,27 +158,80 @@
       (json.nodes||[]).forEach(function(n,i){(n.children||[]).forEach(function(ch){nodes[i].add(nodes[ch]);});});
       const sceneDef=scenes[sceneIndex]||scenes[0];
       (sceneDef.nodes||[]).forEach(function(i){root.add(nodes[i]);});
-      /* Build skins after node hierarchy exists. */
-      (json.nodes||[]).forEach(function(n,i){
-        if(n.skin===undefined)return;
-        const sd=(json.skins||[])[n.skin]; if(!sd)return;
+      /* Build real glTF skins after the complete node hierarchy exists. */
+      const skinByIndex=[];
+      (json.skins||[]).forEach(function(sd,si){
         const bones=(sd.joints||[]).map(j=>nodes[j]).filter(Boolean);
         const inv=[];
         if(sd.inverseBindMatrices!==undefined){
           const ib=readAccessor(json,bin,sd.inverseBindMatrices);
-          for(let k=0;k<bones.length;k++){const m=new THREE.Matrix4();m.fromArray(ib.array,k*16);inv.push(m);}
-        }else for(let k=0;k<bones.length;k++)inv.push(new THREE.Matrix4());
+          for(let k=0;k<bones.length;k++){
+            const m=new THREE.Matrix4();
+            m.fromArray(ib.array,k*16);
+            inv.push(m);
+          }
+        }else{
+          for(let k=0;k<bones.length;k++)inv.push(new THREE.Matrix4());
+        }
         const skeleton=new THREE.Skeleton(bones,inv);
-        /* glTF skinning depends on the complete bone hierarchy being evaluated before bind. */
-        root.updateMatrixWorld(true);
-        skeleton.calculateInverses();
-        for(let bi=0;bi<bones.length;bi++) if(inv[bi]) skeleton.boneInverses[bi].copy(inv[bi]);
-        const meshes=nodes[i].userData.glbMeshes||[];
-        meshes.forEach(function(sm){sm.frustumCulled=false;sm.matrixAutoUpdate=true;});
+        skinByIndex[si]=skeleton;
       });
       root.updateMatrixWorld(true);
-      root.traverse(function(o){if(o.isMesh){o.frustumCulled=false;o.visible=true;}});
-      onLoad({scene:root,scenes:[root],animations:[],asset:json.asset||{},parser:null});
+      (json.nodes||[]).forEach(function(n,i){
+        if(n.skin===undefined)return;
+        const skeleton=skinByIndex[n.skin];
+        if(!skeleton)return;
+        const meshes=nodes[i].userData.glbMeshes||[];
+        meshes.forEach(function(sm){
+          sm.frustumCulled=false;sm.matrixAutoUpdate=true;
+          if(sm.isSkinnedMesh){
+            sm.bind(skeleton,new THREE.Matrix4());
+            sm.normalizeSkinWeights();
+            sm.pose();
+          }
+        });
+      });
+
+      /* glTF animation clips -> native Three.js AnimationClip tracks. */
+      function buildAnimations(){
+        const clips=[];
+        (json.animations||[]).forEach(function(ad,ai){
+          const tracks=[];
+          (ad.channels||[]).forEach(function(ch){
+            const s=ad.samplers&&ad.samplers[ch.sampler];
+            const target=ch.target||{};
+            if(!s||target.node===undefined||!target.path)return;
+            const input=readAccessor(json,bin,s.input);
+            const output=readAccessor(json,bin,s.output);
+            const node=nodes[target.node];
+            if(!node)return;
+            const path=target.path==='translation'?'position':target.path==='rotation'?'quaternion':target.path==='scale'?'scale':null;
+            if(!path)return;
+            const stride=path==='quaternion'?4:3;
+            const values=output.array;
+            let Track=path==='quaternion'?THREE.QuaternionKeyframeTrack:THREE.VectorKeyframeTrack;
+            const times=input.array instanceof Float32Array?input.array:new Float32Array(input.array);
+            let vals=values instanceof Float32Array?values:new Float32Array(values);
+            if(s.interpolation==='STEP'){
+              Track=path==='quaternion'?THREE.QuaternionKeyframeTrack:THREE.VectorKeyframeTrack;
+            }
+            const track=new Track(node.name+'.'+path,times,vals);
+            if(s.interpolation==='STEP'&&track.setInterpolation&&THREE.InterpolateDiscrete!==undefined)
+              track.setInterpolation(THREE.InterpolateDiscrete);
+            tracks.push(track);
+          });
+          const clip=new THREE.AnimationClip(ad.name||('gltf_anim_'+ai),-1,tracks);
+          clip.resetDuration();
+          clips.push(clip);
+        });
+        return clips;
+      }
+      const animations=buildAnimations();
+      root.updateMatrixWorld(true);
+      root.traverse(function(o){
+        if(o.isMesh){o.frustumCulled=false;o.visible=true;}
+      });
+      onLoad({scene:root,scenes:[root],animations:animations,asset:json.asset||{},parser:null});
     }catch(e){console.error('[GLB]',e);if(onError)onError(e);}
   }
   window.LocalGLBLoader={load:load,parseGLB:parseGLB};

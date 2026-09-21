@@ -6514,57 +6514,17 @@ function update3D(dt){
       continue;
     }
   }
-  /* player rig — keep the procedural body as a safe fallback while the real GLB loads. */
-  if(!E3.playerRig){
-    E3.playerRig=rigHumanoid({cloth:0x3f4735,skin:0x6b5c4c,dark:0x2b3129,gun:true});
-    E3.world.add(E3.playerRig);
-  }
-  if(E3.playerRig.parent!==E3.world)E3.world.add(E3.playerRig);
-  const pr=E3.playerRig,pu=pr.userData;
+  /* ---- PLAYER: real Survival Character only ----
+     Collision/gameplay state remains G.player; the visible body is the imported
+     skinned GLB. The procedural humanoid is no longer rendered or animated. */
   const alexRoot=E3.alexReal.root;
   if(alexRoot){
     if(alexRoot.parent!==E3.world)E3.world.add(alexRoot);
     alexRoot.position.set(P.x,py,P.y);
     alexRoot.rotation.y=-(P.modelYaw!=null?P.modelYaw:IN.aim)-Math.PI/2+Math.PI;
     alexRoot.visible=!P.hidden&&!P.dead;
+    updateAlexRigFromANIM((typeof ANIM!=='undefined'&&ANIM.pose)?ANIM.pose:null);
     alexRoot.updateMatrixWorld(true);
-    pr.visible=false;
-  }else{
-    pr.visible=!P.hidden&&!P.dead;
-  }
-  if(pr.visible){
-    /* hide the body only if the camera is pulled uncomfortably close */
-    const cd=cam.position.distanceTo?cam.position.distanceTo(pr.position):99;
-    if(cd<0.9)pr.visible=false;
-  }
-  /* ---- Animation System (Phase 9): apply the blended pose from the FSM ---- */
-  const ap=(typeof ANIM!=='undefined'&&ANIM.pose)?ANIM.pose:null;
-  pr.position.set(P.x,py+(ap?(ap.rootY||0):0),P.y);
-  pr.rotation.y=-(P.modelYaw!=null?P.modelYaw:IN.aim)-Math.PI/2;
-  pr.rotation.z=ap?(ap.rootRoll||0):0;
-  if(ap){
-    const aCr=ap.crouch||0;
-    if(pu.legs){pu.legs[0].rotation.x=ap.legL||0;pu.legs[1].rotation.x=ap.legR||0;}
-    if(pu.arms){pu.arms[0].rotation.x=ap.armL||0;pu.arms[1].rotation.x=ap.armR||0;}
-    if(pu.torso){pu.torso.rotation.x=-(ap.torsoLean||0);pu.torso.rotation.y=ap.torsoTwist||0;
-      pu.torso.position.y=1.20+(ap.torsoY||0)-0.24*aCr;}
-    if(pu.head){pu.head.position.y=1.75+(ap.headY||0)-0.24*aCr;pu.head.rotation.x=ap.headTilt||0;}
-    pr.scale.y=(ap.scaleY!=null?ap.scaleY:1);
-  }else{
-    /* fallback (ANIM not ready): the original simple cycle */
-    const st=P.anim||'idle';
-    let amp=0,freq=0,armAmp=0;
-    if(st==='walk'){amp=0.55;freq=9.0;armAmp=0.50;}
-    else if(st==='sprint'){amp=0.85;freq=13.5;armAmp=0.75;}
-    else if(st==='crouch'){amp=0.40;freq=6.5;armAmp=0.35;}
-    const breath=st==='idle'?Math.sin(G.time*1.6)*0.035:0;
-    const pw=amp>0?Math.sin(G.time*freq)*amp:breath;
-    if(pu.legs){pu.legs[0].rotation.x=pw;pu.legs[1].rotation.x=-pw;}
-    if(pu.arms){pu.arms[0].rotation.x=-pw*armAmp;pu.arms[1].rotation.x=pw*armAmp;}
-    const crouchDrop=P.crouch?-0.24:0;
-    if(pu.torso)pu.torso.position.y=1.20+crouchDrop+Math.abs(pw)*0.03+breath*0.5;
-    if(pu.head)pu.head.position.y=1.75+crouchDrop+breath*0.5;
-    pr.scale.y=P.crouch?0.86:1;
   }
   /* memory layer tint */
   const fogC=E3.scene.fog.color;

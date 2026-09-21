@@ -6083,6 +6083,9 @@ function applyQuality(){
 }
 function disposeWorld(){
   if(!E3.world)return;
+  /* Keep the loaded Alex GLB alive across scene rebuilds; only detach it. */
+  const keepAlex=E3.alexReal&&E3.alexReal.root;
+  if(keepAlex&&keepAlex.parent===E3.world)E3.world.remove(keepAlex);
   E3.world.traverse(o=>{
     if(o.geometry)o.geometry.dispose();
     if(o.material){

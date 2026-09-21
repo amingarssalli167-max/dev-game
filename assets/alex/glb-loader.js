@@ -176,6 +176,9 @@
         const skeleton=new THREE.Skeleton(bones,inv);
         skinByIndex[si]=skeleton;
       });
+      /* Important: glTF inverse-bind matrices are expressed relative to the
+         skinned node. Bind the Three.js skeleton with that node's world matrix;
+         binding against identity can collapse a valid character to the origin. */
       root.updateMatrixWorld(true);
       (json.nodes||[]).forEach(function(n,i){
         if(n.skin===undefined)return;
@@ -185,12 +188,13 @@
         meshes.forEach(function(sm){
           sm.frustumCulled=false;sm.matrixAutoUpdate=true;
           if(sm.isSkinnedMesh){
-            sm.bind(skeleton,new THREE.Matrix4());
+            const bindMatrix=nodes[i].matrixWorld.clone();
+            sm.bind(skeleton,bindMatrix);
             sm.normalizeSkinWeights();
-            sm.pose();
           }
         });
       });
+      root.updateMatrixWorld(true);
 
       /* glTF animation clips -> native Three.js AnimationClip tracks. */
       function buildAnimations(){

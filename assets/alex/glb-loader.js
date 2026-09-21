@@ -191,7 +191,13 @@
             /* Match Three.js GLTFLoader semantics: the mesh node's world
                matrix is the glTF bind matrix, while inverseBindMatrices stay
                inside the Skeleton. Do not pose/scale the skeleton here. */
-            const bindMatrix=nodes[i].matrixWorld.clone();
+            /* The source asset's inverseBindMatrices were producing a collapsed
+               pose in our lightweight loader. Reconstruct the bind inverses from
+               the imported rest-pose hierarchy instead. This is mathematically
+               equivalent for a character whose nodes are already in bind pose,
+               and keeps the real Skeleton fully usable for animation. */
+            skeleton.calculateInverses();
+            const bindMatrix=new THREE.Matrix4();
             sm.bind(skeleton,bindMatrix);
             sm.normalizeSkinWeights();
             skeleton.update();

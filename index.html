@@ -5024,7 +5024,15 @@ function loop(ts){
   }
   G.time+=dt;
   updatePlayer(dt);
-  if(typeof ANIM!=='undefined')ANIM.update(dt,G.player);
+  /* Animation safety: a bad pose/state must never kill the main loop and leave a black frame. */
+  if(typeof ANIM!=='undefined'){
+    try{ANIM.update(dt,G.player);}
+    catch(animErr){
+      console.warn('[ANIM] update failed:',animErr);
+      if(typeof ANIM.zero==='function')ANIM.pose=ANIM.zero();
+      ANIM.over=null;
+    }
+  }
   updateEnts(dt);
   updateBeats(dt);
   updateAnoms(dt);

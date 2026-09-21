@@ -225,11 +225,14 @@
 </div>
 <div id="cross"></div>
 <div id="noGL" class="hide">
-  <div class="panel" style="max-width:560px;text-align:center">
-    <h1 style="font-size:22px">WebGL غير متاح</h1>
-    <p class="dim" style="margin-top:12px">هذه اللعبة تعمل بمحرّك ثلاثي الأبعاد (WebGL) فقط.<br>
-      فعّل تسريع العتاد من إعدادات المتصفح، أو جرّب متصفحًا حديثًا
-      (Chrome / Edge / Firefox / Safari).</p>
+  <div class="panel" style="max-width:650px;text-align:center">
+    <h1 style="font-size:22px">تعذّر تشغيل WebGL</h1>
+    <p class="dim" style="margin-top:12px">تم اكتشاف المشكلة أثناء تهيئة محرّك Three.js. التفاصيل الفعلية لجهازك ومتصفحك تظهر أدناه.</p>
+    <div id="glDiag" style="margin:16px 0;text-align:left;direction:ltr;background:#080b0e;border:1px solid #202a30;padding:14px;font:12px/1.75 Consolas,monospace;color:#aebbc2;white-space:pre-wrap;word-break:break-word"></div>
+    <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+      <button class="btn small" id="btnGLRetry">إعادة فحص WebGL</button>
+      <button class="btn small" id="btnGLReload">إعادة تحميل الصفحة</button>
+    </div>
   </div>
 </div>
 <div id="hud" class="hide">
@@ -5169,6 +5172,15 @@ function boot(){
     $('noGL').classList.remove('hide');
     const b=$('btnNew'),c=$('btnCont'),m=$('btnMode');
     if(b)b.disabled=true;if(c)c.disabled=true;if(m)m.disabled=true;
+    showWebGLDiagnostics();
+    const retry=$('btnGLRetry');
+    if(retry)retry.onclick=()=>{
+      E3.lastErr='';
+      if(init3D()){ $('noGL').classList.add('hide'); $('btnNew').disabled=false; $('btnCont').disabled=false; }
+      else showWebGLDiagnostics();
+    };
+    const reload=$('btnGLReload');
+    if(reload)reload.onclick=()=>location.reload();
   }
   syncModeUI();
   $('btnNew').onclick=()=>startGame(true);
@@ -5914,13 +5926,50 @@ function makeChar(e){
 }
 
 /* ---------------- engine init ---------------- */
+function diagnoseWebGL(){
+  const d={browser:navigator.userAgent||'unknown',webgl2:false,webgl1:false,contextError:'',renderer:'unknown',vendor:'unknown'};
+  try{
+    const test=document.createElement('canvas');
+    let gl2=null,gl1=null;
+    try{gl2=test.getContext('webgl2',{powerPreference:'high-performance'});}catch(e){d.contextError='WebGL2: '+String(e&&e.message||e);}
+    try{gl1=gl2||test.getContext('webgl',{powerPreference:'high-performance'})||test.getContext('experimental-webgl');}catch(e){d.contextError+=(d.contextError?' | ':'')+'WebGL1: '+String(e&&e.message||e);}
+    d.webgl2=!!gl2; d.webgl1=!!gl1;
+    const gl=gl2||gl1;
+    if(gl){
+      try{
+        const dbg=gl.getExtension('WEBGL_debug_renderer_info');
+        if(dbg){d.vendor=gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL)||'unknown';d.renderer=gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)||'unknown';}
+        else d.renderer=gl.getParameter(gl.RENDERER)||'unknown';
+      }catch(e){}
+    }
+  }catch(e){d.contextError=String(e&&e.message||e);}
+  return d;
+}
+function showWebGLDiagnostics(){
+  const d=diagnoseWebGL(),el=$('glDiag');
+  if(!el)return;
+  const lines=[
+    'WebGL2: '+(d.webgl2?'AVAILABLE':'UNAVAILABLE'),
+    'WebGL1: '+(d.webgl1?'AVAILABLE':'UNAVAILABLE'),
+    'Three.js: '+(typeof THREE!=='undefined'?'LOADED':'MISSING'),
+    'Renderer: '+d.renderer,
+    'Vendor: '+d.vendor,
+    'Engine error: '+(E3.lastErr||'none'),
+    'Context error: '+(d.contextError||'none'),
+    'User agent: '+d.browser
+  ];
+  if(!d.webgl2&&!d.webgl1)lines.push('Diagnosis: the browser could not create any WebGL context. Common causes: hardware acceleration disabled, blocked/blacklisted GPU driver, or an unsupported GPU/driver.');
+  else if(!E3.ok)lines.push('Diagnosis: WebGL context exists, but Three.js renderer initialization failed. The Engine error above is the relevant failure.');
+  el.textContent=lines.join('\\n');
+}
 function init3D(){
   if(E3.ok)return true;
   if(typeof THREE==='undefined'){E3.lastErr='three.js missing';return false;}
   try{
     const test=document.createElement('canvas');
-    const gl=test.getContext('webgl2')||test.getContext('webgl');
-    if(!gl){E3.lastErr='no webgl';return false;}
+    const gl2=test.getContext('webgl2',{powerPreference:'high-performance'});
+    const gl=gl2||test.getContext('webgl',{powerPreference:'high-performance'})||test.getContext('experimental-webgl');
+    if(!gl){E3.lastErr='WebGL context creation returned null';return false;}
     const glc=$('gl')||document.createElement('canvas');
     E3.glCanvas=glc;
     E3.renderer=new THREE.WebGLRenderer({canvas:glc,antialias:E3.quality>1,powerPreference:'high-performance',

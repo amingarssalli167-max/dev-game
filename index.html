@@ -6063,9 +6063,11 @@ function loadAlexModel(){
       root.name='Alex_Real_SurvivalCharacter';
       root.scale.setScalar(scale);
       root.updateMatrixWorld(true);
+      /* Align feet to ground: shift model so its lowest point sits at y=0.
+         The root node already applies a 0.01 scale (cm→m) from the GLB.
+         Do NOT set rotation.y here — update3D handles aim-based orientation. */
       const b2=new THREE.Box3().setFromObject(root);
       root.position.y-=b2.min.y;
-      root.rotation.y=Math.PI;
       root.userData.alexReal=true;
       root.userData.meshCount=meshes;
       root.userData.skinnedMeshCount=skins;
@@ -6083,7 +6085,9 @@ function loadAlexModel(){
       console.info('[ALEX] REAL SKELETON READY:',{
         meshes,skins,verts,sourceHeight:h,scale,
         bones:Object.keys(E3.alexReal.bones).length,
-        clips:E3.alexReal.clips.length
+        clips:E3.alexReal.clips.length,
+        rootScale:root.scale.x.toFixed(4),
+        groundY:(-b2.min.y).toFixed(3)
       });
       if(E3.world&&E3.world.parent===E3.scene&&!root.parent)E3.world.add(root);
     }catch(e){

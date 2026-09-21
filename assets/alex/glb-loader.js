@@ -196,14 +196,30 @@
                the imported rest-pose hierarchy instead. This is mathematically
                equivalent for a character whose nodes are already in bind pose,
                and keeps the real Skeleton fully usable for animation. */
-            skeleton.calculateInverses();
-            const bindMatrix=new THREE.Matrix4();
+            /* First use the actual glTF inverse-bind matrices. */
+            const bindMatrix=nodes[i].matrixWorld.clone();
             sm.bind(skeleton,bindMatrix);
             sm.normalizeSkinWeights();
             skeleton.update();
             sm.skeleton.update();
             sm.userData.glbBindMatrix=bindMatrix.clone();
             sm.userData.glbBoneCount=skeleton.bones.length;
+            /* Safety fallback: if skinning collapses the imported geometry,
+               keep an exact bind-pose mesh visible while the real skeleton
+               remains attached for the animation bridge. */
+            const testBox=new THREE.Box3().setFromObject(sm);
+            const testSize=testBox.getSize(new THREE.Vector3());
+            if(!isFinite(testSize.y)||testSize.y<0.01){
+              const fallback=new THREE.Mesh(sm.geometry,sm.material);
+              fallback.name='Alex_BindPose_Fallback';
+              fallback.castShadow=true;fallback.receiveShadow=true;
+              fallback.frustumCulled=false;
+              fallback.userData.alexBindPoseFallback=true;
+              fallback.userData.sourceSkinnedMesh=sm;
+              sm.visible=false;
+              nodes[i].add(fallback);
+              console.warn('[GLB] skin collapsed; using bind-pose visibility fallback');
+            }
           }
         });
       });

@@ -98,7 +98,7 @@
     g.setAttribute('position',new THREE.BufferAttribute(pos.array,3));
     if(attrs.NORMAL!==undefined){const a=readAccessor(json,bin,attrs.NORMAL);g.setAttribute('normal',new THREE.BufferAttribute(a.array,3));}
     if(attrs.TEXCOORD_0!==undefined){const a=readAccessor(json,bin,attrs.TEXCOORD_0);g.setAttribute('uv',new THREE.BufferAttribute(a.array,2));}
-    if(attrs.COLOR_0!==undefined){const a=readAccessor(json,bin,attrs.COLOR_0);g.setAttribute('color',new THREE.BufferAttribute(a.array,a.itemSize));}
+    if(attrs.COLOR_0!==undefined){const a=readAccessor(json,bin,attrs.COLOR_0);g.setAttribute('color',new THREE.BufferAttribute(a.array,a.itemSize,a.normalized));}
     if(skinIndex!==undefined){
       if(attrs.JOINTS_0!==undefined){const a=readAccessor(json,bin,attrs.JOINTS_0);g.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(a.array,4));}
       if(attrs.WEIGHTS_0!==undefined){const a=readAccessor(json,bin,attrs.WEIGHTS_0);g.setAttribute('skinWeight',new THREE.Float32BufferAttribute(a.array,4));}

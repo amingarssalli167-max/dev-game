@@ -9,7 +9,8 @@ const E3={
   sprites:[], poolLights:[], flash:null, flashTarget:null,
   yaw:Math.PI/2, pitch:-0.04, bob:0, quality:2, view:'ots',
   builtFor:null, waterMat:null, wheel:null, wheelGondolas:[],
-  soldierTorch:null, charRig:null, disposables:[], frame:0
+  soldierTorch:null, charRig:null, disposables:[], frame:0,
+  alexReal:{root:null,ready:false,loading:false,error:'',height:1.82}
 };
 G.mode3d=false;
 

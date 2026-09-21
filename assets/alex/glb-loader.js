@@ -229,8 +229,18 @@
             staticMesh.userData.sourceSkinnedMesh=sm;
             staticMesh.userData.glbNode=i;
             staticMesh.visible=true;
+
+            /* IMPORTANT: never parent the raw visibility copy to a Bone.
+               Bone transforms can move/collapse it when the custom skin
+               hierarchy is evaluated. Freeze the exact bind-pose world matrix
+               and attach the copy directly to the GLB root. */
+            root.updateMatrixWorld(true);
+            sm.updateMatrixWorld(true);
+            staticMesh.matrixAutoUpdate=false;
+            staticMesh.matrix.copy(sm.matrixWorld);
+            staticMesh.matrixWorld.copy(sm.matrixWorld);
             sm.visible=false;
-            nodes[i].add(staticMesh);
+            root.add(staticMesh);
 
             const testBox=new THREE.Box3().setFromObject(staticMesh);
             const testSize=testBox.getSize(new THREE.Vector3());

@@ -193,13 +193,7 @@
           if(sm.isSkinnedMesh){
             /* Match Three.js GLTFLoader semantics: the mesh node's world
                matrix is the glTF bind matrix, while inverseBindMatrices stay
-               inside the Skeleton. Do not pose/scale the skeleton here. */
-            /* The source asset's inverseBindMatrices were producing a collapsed
-               pose in our lightweight loader. Reconstruct the bind inverses from
-               the imported rest-pose hierarchy instead. This is mathematically
-               equivalent for a character whose nodes are already in bind pose,
-               and keeps the real Skeleton fully usable for animation. */
-            /* First use the actual glTF inverse-bind matrices. */
+               inside the Skeleton. */
             const bindMatrix=nodes[i].matrixWorld.clone();
             sm.bind(skeleton,bindMatrix);
             sm.normalizeSkinWeights();
@@ -207,66 +201,12 @@
             sm.skeleton.update();
             sm.userData.glbBindMatrix=bindMatrix.clone();
             sm.userData.glbBoneCount=skeleton.bones.length;
-
-            /* VISIBILITY-FIRST SAFETY RENDER:
-               Our lightweight loader must never make a valid GLB disappear just
-               because a custom skin matrix differs from Three.js GLTFLoader.
-               Keep the real SkinnedMesh + Skeleton alive for animation, but
-               render a static bind-pose copy beside it until skinning is proven.
-               MeshBasicMaterial also removes lighting as a possible reason for
-               an invisible character. */
-            /* Use an unlit material for the visibility copy. This guarantees the
-               imported character remains visible even if the scene lights do not
-               illuminate the source PBR material. Keep the source texture when
-               available so this is still the real Alex geometry/appearance. */
-            const sourceMat=sm.material;
-            const staticMat=new THREE.MeshBasicMaterial({
-              color:(sourceMat&&sourceMat.color)?sourceMat.color.clone():new THREE.Color(0xffffff),
-              map:(sourceMat&&sourceMat.map)?sourceMat.map:null,
-              vertexColors:!!(sm.geometry&&sm.geometry.getAttribute&&sm.geometry.getAttribute('color')),
-              side:THREE.DoubleSide
-            });
-            staticMat.transparent=false;
-            staticMat.opacity=1;
-            staticMat.depthWrite=true;
-            staticMat.toneMapped=false;
-            const staticMesh=new THREE.Mesh(sm.geometry,staticMat);
-            staticMesh.name='Alex_BindPose_Visible';
-            staticMesh.castShadow=true;
-            staticMesh.receiveShadow=true;
-            staticMesh.frustumCulled=false;
-            staticMesh.renderOrder=5;
-            staticMesh.userData.alexBindPoseVisible=true;
-            staticMesh.userData.sourceSkinnedMesh=sm;
-            staticMesh.userData.glbNode=i;
-            staticMesh.visible=true;
-
-            /* IMPORTANT: never parent the raw visibility copy to a Bone.
-               Bone transforms can move/collapse it when the custom skin
-               hierarchy is evaluated. Freeze the exact bind-pose world matrix
-               and attach the copy directly to the GLB root. */
-            root.updateMatrixWorld(true);
-            sm.updateMatrixWorld(true);
-            /* Use a normal transform hierarchy for the frozen copy.
-               Decomposing the bind-pose world matrix is more reliable than
-               manually freezing matrixWorld because the parent GLB root is
-               later scaled/rotated by the gameplay layer. */
-            const frozenPos=new THREE.Vector3();
-            const frozenQuat=new THREE.Quaternion();
-            const frozenScale=new THREE.Vector3();
-            sm.matrixWorld.decompose(frozenPos,frozenQuat,frozenScale);
-            staticMesh.matrixAutoUpdate=true;
-            staticMesh.position.copy(frozenPos);
-            staticMesh.quaternion.copy(frozenQuat);
-            staticMesh.scale.copy(frozenScale);
-            sm.visible=false;
-            root.add(staticMesh);
-            staticMesh.visible=true;
-            staticMesh.updateMatrixWorld(true);
-
-            const testBox=new THREE.Box3().setFromObject(staticMesh);
-            const testSize=testBox.getSize(new THREE.Vector3());
-            console.info('[GLB] visible bind-pose mesh',i,'height=',testSize.y,'skinBones=',skeleton.bones.length);
+            /* Show the real SkinnedMesh directly — the skeleton is bound
+               correctly and the procedural ANIM system drives the bones.
+               No static bind-pose copy is needed. */
+            sm.visible=true;
+            sm.material.needsUpdate=true;
+            console.info('[GLB] SkinnedMesh bound','node='+i,'bones='+skeleton.bones.length,'verts='+(sm.geometry.attributes.position?sm.geometry.attributes.position.count:0));
           }
         });
       });
@@ -311,11 +251,8 @@
       root.traverse(function(o){
         if(!o.isMesh)return;
         o.frustumCulled=false;
-        /* The real SkinnedMesh remains loaded and animated, but the safety
-           bind-pose copy is the renderer until custom skinning is proven.
-           Never re-enable the SkinnedMesh here: doing so can depth-occlude the
-           visible bind-pose copy when the imported skin matrices collapse. */
-        o.visible=!o.userData.glbSkinned;
+        /* All meshes (including SkinnedMesh) are visible. */
+        o.visible=true;
       });
       onLoad({scene:root,scenes:[root],animations:animations,asset:json.asset||{},parser:null});
     }catch(e){console.error('[GLB]',e);if(onError)onError(e);}

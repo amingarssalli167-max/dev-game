@@ -6021,7 +6021,9 @@ function updateAlexRigFromANIM(ap){
     const rp=b.hips.userData.alexRestPos;
     if(rp)b.hips.position.set(rp.x,rp.y+(p.rootY||0)-0.22*crouch,rp.z);
   }
-  A.root.scale.y=1-0.14*crouch;
+  /* Do not scale the whole imported character: the GLB skeleton owns
+     its bind pose. Crouch is driven by hips/legs below and the gameplay
+     controller remains responsible for the actual collider height. */
   A.root.updateMatrixWorld(true);
 }
 /* ---------------- real Alex model ---------------- */

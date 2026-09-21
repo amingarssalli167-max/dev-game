@@ -6045,7 +6045,11 @@ function loadAlexModel(){
         if(o.isMesh){
           meshes++; verts+=o.geometry&&o.geometry.attributes.position?o.geometry.attributes.position.count:0;
           if(o.isSkinnedMesh)skins++;
-          o.castShadow=true;o.receiveShadow=true;o.frustumCulled=false;o.visible=true;
+          o.castShadow=true;o.receiveShadow=true;o.frustumCulled=false;
+          /* Keep the real SkinnedMesh loaded for its skeleton/animation data,
+             but do not let its unverified skin deformation hide the visible
+             bind-pose copy created by the GLB loader. */
+          o.visible=!o.userData.glbSkinned;
           if(o.material&&o.material.map)o.material.map.anisotropy=Math.min(4,E3.renderer.capabilities.getMaxAnisotropy());
           if(o.material){o.material.needsUpdate=true;}
         }

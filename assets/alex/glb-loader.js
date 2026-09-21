@@ -126,7 +126,8 @@
       const parsed=parseGLB(await res.arrayBuffer()),json=parsed.json,bin=parsed.bin;
       const texPromises=(json.textures||[]).map((_,i)=>loadImageTexture(json,bin,i));
       const textures=await Promise.all(texPromises);
-      const nodes=(json.nodes||[]).map(function(n,i){const o=n.isBone?new THREE.Bone():new THREE.Object3D();o.name=n.name||('node_'+i);transformNode(o,n);o.userData.glbNode=i;return o;});
+      const jointSet=new Set();(json.skins||[]).forEach(function(s){(s.joints||[]).forEach(function(j){jointSet.add(j);});});
+      const nodes=(json.nodes||[]).map(function(n,i){const o=jointSet.has(i)?new THREE.Bone():new THREE.Object3D();o.name=n.name||('node_'+i);transformNode(o,n);o.userData.glbNode=i;return o;});
       const scenes=json.scenes||[{nodes:[]}],sceneIndex=json.scene!==undefined?json.scene:0;
       const root=new THREE.Group();root.name=json.asset&&json.asset.generator?('SurvivalCharacter • '+json.asset.generator):'SurvivalCharacter';
       const meshNodes=[];

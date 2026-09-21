@@ -43,8 +43,12 @@
     const t=json.textures[texIndex], im=json.images[t.source];
     if(!t||!im)return Promise.resolve(null);
     const blob=imageBlob(json,bin,t.source);
-    if(!blob)return Promise.resolve(null);
-    const url=URL.createObjectURL(blob);
+    let url='';
+    if(blob) url=URL.createObjectURL(blob);
+    else if(im.uri){
+      if(/^data:/i.test(im.uri)) url=im.uri;
+      else return Promise.resolve(null);
+    }else return Promise.resolve(null);
     return new Promise(function(resolve,reject){
       const img=new Image();
       img.onload=function(){
@@ -53,11 +57,11 @@
           tx.needsUpdate=true;
           tx.colorSpace=THREE.SRGBColorSpace||tx.colorSpace;
           tx.flipY=false;
-          URL.revokeObjectURL(url);
+          if(/^blob:/i.test(url))URL.revokeObjectURL(url);
           resolve(tx);
         }catch(e){URL.revokeObjectURL(url);reject(e);}
       };
-      img.onerror=function(e){URL.revokeObjectURL(url);reject(e);};
+      img.onerror=function(e){if(/^blob:/i.test(url))URL.revokeObjectURL(url);reject(e);};
       img.src=url;
     });
   }
@@ -124,17 +128,15 @@
       const res=await fetch(url,{cache:'no-cache'});
       if(!res.ok)throw new Error('GLB HTTP '+res.status);
       const parsed=parseGLB(await res.arrayBuffer()),json=parsed.json,bin=parsed.bin;
-      const texPromises=(json.textures||[]).map((_,i)=>loadImageTexture(json,bin,i));
+      const texPromises=(json.textures||[]).map((_,i)=>loadImageTexture(json,bin,i).catch(function(e){
+        console.warn('[GLB] texture '+i+' failed; continuing without it:',e);
+        return null;
+      }));
       const textures=await Promise.all(texPromises);
       const jointSet=new Set();(json.skins||[]).forEach(function(s){(s.joints||[]).forEach(function(j){jointSet.add(j);});});
       const nodes=(json.nodes||[]).map(function(n,i){const o=jointSet.has(i)?new THREE.Bone():new THREE.Object3D();o.name=n.name||('node_'+i);transformNode(o,n);o.userData.glbNode=i;return o;});
       const scenes=json.scenes||[{nodes:[]}],sceneIndex=json.scene!==undefined?json.scene:0;
       const root=new THREE.Group();root.name=json.asset&&json.asset.generator?('SurvivalCharacter • '+json.asset.generator):'SurvivalCharacter';
-      const meshNodes=[];
-      (json.meshes||[]).forEach(function(md,mi){
-        const holder=new THREE.Group();holder.userData.glbMesh=mi;
-        (md.primitives||[]).forEach(function(p){meshNodes.push({mesh:primitiveMesh(json,bin,md,p,undefined,textures),meshIndex:mi});});
-      });
       (json.nodes||[]).forEach(function(n,i){
         if(n.mesh===undefined)return;
         const holder=nodes[i];

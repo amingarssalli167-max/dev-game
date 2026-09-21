@@ -5960,7 +5960,7 @@ function showWebGLDiagnostics(){
   ];
   if(!d.webgl2&&!d.webgl1)lines.push('Diagnosis: the browser could not create any WebGL context. Common causes: hardware acceleration disabled, blocked/blacklisted GPU driver, or an unsupported GPU/driver.');
   else if(!E3.ok)lines.push('Diagnosis: WebGL context exists, but Three.js renderer initialization failed. The Engine error above is the relevant failure.');
-  el.textContent=lines.join('\\n');
+  el.textContent=lines.join('\n');
 }
 function init3D(){
   if(E3.ok)return true;

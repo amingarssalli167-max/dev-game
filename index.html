@@ -5234,7 +5234,9 @@ const E3={
   yaw:Math.PI/2, pitch:-0.04, bob:0, quality:2, view:'ots', camSnap:true,
   camDist:2.7,
   builtFor:null, waterMat:null, wheel:null, wheelGondolas:[],
-  soldierTorch:null, charRig:null, disposables:[], frame:0, focusRing:null
+  soldierTorch:null, charRig:null, disposables:[], frame:0, focusRing:null,
+  /* Real Alex GLB state — kept inside the 3D engine state, never assumed to exist elsewhere. */
+  alexReal:{root:null,ready:false,loading:false,error:'',height:1.82}
 };
 
 /* ---------------- procedural textures ---------------- */

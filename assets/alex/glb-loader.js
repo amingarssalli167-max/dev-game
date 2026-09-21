@@ -103,7 +103,12 @@
     if(prim.indices!==undefined){const a=readAccessor(json,bin,prim.indices);g.setIndex(new THREE.BufferAttribute(indexArray(a),1));}
     g.computeBoundingBox();g.computeBoundingSphere();
     const mat=matFor(json,bin,prim.material,textures);
-    const sm=skinIndex!==undefined?new THREE.SkinnedMesh(g,mat):new THREE.Mesh(g,mat);
+    /* Visual-first integration: render the imported bind/A-pose directly.
+       We intentionally do not create a SkinnedMesh yet because this loader is
+       presentation-only; incorrect inverse-bind data can collapse the entire
+       character. Animation will be layered on after the real mesh is visible. */
+    const sm=new THREE.Mesh(g,mat);
+    sm.userData.glbSkinned=skinIndex!==undefined;
     sm.castShadow=true;sm.receiveShadow=true;
     if(prim.mode!==undefined&&prim.mode!==4)sm.userData.glbPrimitiveMode=prim.mode;
     return sm;
@@ -167,7 +172,7 @@
         skeleton.calculateInverses();
         for(let bi=0;bi<bones.length;bi++) if(inv[bi]) skeleton.boneInverses[bi].copy(inv[bi]);
         const meshes=nodes[i].userData.glbMeshes||[];
-        meshes.forEach(function(sm){if(sm.isSkinnedMesh){sm.bind(skeleton,new THREE.Matrix4());sm.frustumCulled=false;sm.matrixAutoUpdate=true;}});
+        meshes.forEach(function(sm){sm.frustumCulled=false;sm.matrixAutoUpdate=true;});
       });
       root.updateMatrixWorld(true);
       root.traverse(function(o){if(o.isMesh){o.frustumCulled=false;o.visible=true;}});

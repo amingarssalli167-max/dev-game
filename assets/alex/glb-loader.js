@@ -188,9 +188,16 @@
         meshes.forEach(function(sm){
           sm.frustumCulled=false;sm.matrixAutoUpdate=true;
           if(sm.isSkinnedMesh){
+            /* Match Three.js GLTFLoader semantics: the mesh node's world
+               matrix is the glTF bind matrix, while inverseBindMatrices stay
+               inside the Skeleton. Do not pose/scale the skeleton here. */
             const bindMatrix=nodes[i].matrixWorld.clone();
             sm.bind(skeleton,bindMatrix);
             sm.normalizeSkinWeights();
+            skeleton.update();
+            sm.skeleton.update();
+            sm.userData.glbBindMatrix=bindMatrix.clone();
+            sm.userData.glbBoneCount=skeleton.bones.length;
           }
         });
       });

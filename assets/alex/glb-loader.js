@@ -162,10 +162,15 @@
           for(let k=0;k<bones.length;k++){const m=new THREE.Matrix4();m.fromArray(ib.array,k*16);inv.push(m);}
         }else for(let k=0;k<bones.length;k++)inv.push(new THREE.Matrix4());
         const skeleton=new THREE.Skeleton(bones,inv);
+        /* glTF skinning depends on the complete bone hierarchy being evaluated before bind. */
+        root.updateMatrixWorld(true);
+        skeleton.calculateInverses();
+        for(let bi=0;bi<bones.length;bi++) if(inv[bi]) skeleton.boneInverses[bi].copy(inv[bi]);
         const meshes=nodes[i].userData.glbMeshes||[];
-        meshes.forEach(function(sm){if(sm.isSkinnedMesh){sm.bind(skeleton,new THREE.Matrix4());sm.frustumCulled=false;}});
+        meshes.forEach(function(sm){if(sm.isSkinnedMesh){sm.bind(skeleton,new THREE.Matrix4());sm.frustumCulled=false;sm.matrixAutoUpdate=true;}});
       });
-      root.traverse(function(o){if(o.isMesh){o.frustumCulled=false;}});
+      root.updateMatrixWorld(true);
+      root.traverse(function(o){if(o.isMesh){o.frustumCulled=false;o.visible=true;}});
       onLoad({scene:root,scenes:[root],animations:[],asset:json.asset||{},parser:null});
     }catch(e){console.error('[GLB]',e);if(onError)onError(e);}
   }

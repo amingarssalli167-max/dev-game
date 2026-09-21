@@ -5967,6 +5967,7 @@ function loadAlexModel(){
       E3.alexReal.loading=false;
       E3.alexReal.error='';
       console.info('[ALEX] real GLB loaded:',root.name,'height',h,'scale',scale);
+      if(E3.world&&E3.world.parent===E3.scene&&!root.parent)E3.world.add(root);
     }catch(e){
       E3.alexReal.loading=false;
       E3.alexReal.error=String(e&&e.message||e);

@@ -5235,8 +5235,10 @@ const E3={
   camDist:2.7,
   builtFor:null, waterMat:null, wheel:null, wheelGondolas:[],
   soldierTorch:null, charRig:null, disposables:[], frame:0, focusRing:null,
-  /* Real Alex GLB state — kept inside the 3D engine state, never assumed to exist elsewhere. */
-  alexReal:{root:null,ready:false,loading:false,error:'',height:1.82}
+  /* Real Alex GLB state — the imported skeleton is the player body.
+     ANIM remains the gameplay FSM; its pose channels are applied to this rig. */
+  alexReal:{root:null,ready:false,loading:false,error:'',height:1.82,
+    mixer:null,clips:[],bones:{},rest:{},meshCount:0,skinnedMeshCount:0,vertexCount:0}
 };
 
 /* ---------------- procedural textures ---------------- */
@@ -5940,6 +5942,88 @@ function makeChar(e){
   return null;
 }
 
+/* ---------------- real Alex skeleton / animation bridge ---------------- */
+function alexNormName(n){
+  return String(n||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+}
+function alexFindBone(root,aliases){
+  let found=null;
+  const want=aliases.map(alexNormName);
+  root.traverse(function(o){
+    if(found||!o.isBone)return;
+    const n=alexNormName(o.userData&&o.userData.glbOriginalName||o.name);
+    for(const a of want)if(n===a||n.indexOf(a)>=0||a.indexOf(n)>=0){found=o;break;}
+  });
+  return found;
+}
+function alexBindSkeleton(root){
+  const aliases={
+    hips:['pelvis','hips','hip'],
+    spine:['spine','spine01','spine_01'],
+    spine1:['spine1','spine02','spine_02'],
+    spine2:['spine2','spine03','spine_03'],
+    neck:['neck','neck01','neck_01'],
+    head:['head'],
+    shoulderL:['leftshoulder','shoulderl','claviclel','clavicle_l'],
+    shoulderR:['rightshoulder','shoulderr','clavicler','clavicle_r'],
+    armL:['leftarm','upperarml','upperarm_l'],
+    armR:['rightarm','upperarmr','upperarm_r'],
+    forearmL:['leftforearm','lowerarml','lowerarm_l'],
+    forearmR:['rightforearm','lowerarmr','lowerarm_r'],
+    handL:['lefthand','handl','hand_l'],
+    handR:['righthand','handr','hand_r'],
+    thighL:['leftupleg','thighl','thigh_l'],
+    thighR:['rightupleg','thighr','thigh_r'],
+    shinL:['leftleg','calfl','calf_l'],
+    shinR:['rightleg','calfr','calf_r'],
+    footL:['leftfoot','footl','foot_l'],
+    footR:['rightfoot','footr','foot_r'],
+    toeL:['lefttoebase','balll','ball_l'],
+    toeR:['righttoebase','ballr','ball_r']
+  };
+  const map={};
+  Object.keys(aliases).forEach(k=>{const b=alexFindBone(root,aliases[k]);if(b)map[k]=b;});
+  Object.keys(map).forEach(k=>{
+    const b=map[k];
+    b.userData.alexRestQ=b.quaternion.clone();
+    b.userData.alexRestPos=b.position.clone();
+  });
+  E3.alexReal.bones=map;
+  console.info('[ALEX] skeleton map:',Object.keys(map));
+  return map;
+}
+function alexQuatDelta(x,y,z){
+  return new THREE.Quaternion().setFromEuler(new THREE.Euler(x||0,y||0,z||0,'XYZ'));
+}
+function alexApplyDelta(bone,x,y,z){
+  if(!bone)return;
+  const q=alexQuatDelta(x,y,z);
+  const rest=bone.userData.alexRestQ;
+  if(rest)bone.quaternion.copy(rest).multiply(q);
+}
+function updateAlexRigFromANIM(ap){
+  const A=E3.alexReal,b=A.bones||{};
+  if(!A.ready||!A.root)return;
+  const p=ap||((typeof ANIM!=='undefined'&&ANIM.pose)?ANIM.pose:null);
+  if(!p)return;
+  const crouch=clamp(p.crouch||0,0,1);
+  /* All motion below is local to the imported skeleton. The procedural
+     humanoid is not involved. */
+  alexApplyDelta(b.thighL,p.legL||0,0,0);
+  alexApplyDelta(b.thighR,p.legR||0,0,0);
+  alexApplyDelta(b.armL,p.armL||0,0,0);
+  alexApplyDelta(b.armR,p.armR||0,0,0);
+  alexApplyDelta(b.spine,-(p.torsoLean||0),p.torsoTwist||0,0);
+  alexApplyDelta(b.spine1,-(p.torsoLean||0)*0.55,(p.torsoTwist||0)*0.65,0);
+  alexApplyDelta(b.neck,0,0,p.headTilt||0);
+  alexApplyDelta(b.head,p.headTilt||0,0,0);
+  if(b.hips){
+    const rp=b.hips.userData.alexRestPos;
+    if(rp)b.hips.position.set(rp.x,rp.y+(p.rootY||0)-0.22*crouch,rp.z);
+  }
+  A.root.scale.y=1-0.14*crouch;
+  A.root.updateMatrixWorld(true);
+}
 /* ---------------- real Alex model ---------------- */
 function loadAlexModel(){
   if(E3.alexReal.loading||E3.alexReal.ready)return;
@@ -5980,11 +6064,21 @@ function loadAlexModel(){
       root.userData.meshCount=meshes;
       root.userData.skinnedMeshCount=skins;
       root.userData.vertexCount=verts;
+      alexBindSkeleton(root);
       E3.alexReal.root=root;
+      E3.alexReal.clips=gltf.animations||[];
+      E3.alexReal.mixer=E3.alexReal.clips.length?new THREE.AnimationMixer(root):null;
+      E3.alexReal.meshCount=meshes;
+      E3.alexReal.skinnedMeshCount=skins;
+      E3.alexReal.vertexCount=verts;
       E3.alexReal.ready=true;
       E3.alexReal.loading=false;
       E3.alexReal.error='';
-      console.info('[ALEX] REAL MODEL READY:',{meshes,skins,verts,sourceHeight:h,scale});
+      console.info('[ALEX] REAL SKELETON READY:',{
+        meshes,skins,verts,sourceHeight:h,scale,
+        bones:Object.keys(E3.alexReal.bones).length,
+        clips:E3.alexReal.clips.length
+      });
       if(E3.world&&E3.world.parent===E3.scene&&!root.parent)E3.world.add(root);
     }catch(e){
       E3.alexReal.loading=false;

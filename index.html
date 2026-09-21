@@ -18,6 +18,7 @@ function(t,e){"object"==typeof exports&&"undefined"!=typeof module?e(exports):"f
 
 window.__threeLoadOK=true;window.__threeInlineReady=!!window.THREE;
 </script>
+<script src="./assets/alex/glb-loader.js"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   html,body{height:100%;width:100%;overflow:hidden;background:#05060a;color:#cdd3d8;
@@ -5937,6 +5938,47 @@ function makeChar(e){
   return null;
 }
 
+/* ---------------- real Alex model ---------------- */
+function loadAlexModel(){
+  if(E3.alexReal.loading||E3.alexReal.ready)return;
+  if(typeof LocalGLBLoader==='undefined'){E3.alexReal.error='LocalGLBLoader missing';return;}
+  E3.alexReal.loading=true;
+  LocalGLBLoader.load('./assets/alex/Survival_Character.glb',function(gltf){
+    try{
+      const root=gltf.scene;
+      root.name='Alex_Real_SurvivalCharacter';
+      root.traverse(function(o){
+        if(o.isMesh){
+          o.castShadow=true;o.receiveShadow=true;o.frustumCulled=false;
+          if(o.material&&o.material.map)o.material.map.anisotropy=Math.min(4,E3.renderer.capabilities.getMaxAnisotropy());
+        }
+      });
+      const box=new THREE.Box3().setFromObject(root);
+      const size=box.getSize(new THREE.Vector3());
+      const h=Math.max(size.y,0.001);
+      const scale=E3.alexReal.height/h;
+      root.scale.setScalar(scale);
+      root.updateMatrixWorld(true);
+      const b2=new THREE.Box3().setFromObject(root);
+      root.position.y-=b2.min.y;
+      root.rotation.y=Math.PI;
+      E3.alexReal.root=root;
+      E3.alexReal.ready=true;
+      E3.alexReal.loading=false;
+      E3.alexReal.error='';
+      console.info('[ALEX] real GLB loaded:',root.name,'height',h,'scale',scale);
+    }catch(e){
+      E3.alexReal.loading=false;
+      E3.alexReal.error=String(e&&e.message||e);
+      console.error('[ALEX] setup failed:',e);
+    }
+  },function(e){
+    E3.alexReal.loading=false;
+    E3.alexReal.error=String(e&&e.message||e);
+    console.error('[ALEX] GLB load failed:',e);
+  });
+}
+
 /* ---------------- engine init ---------------- */
 function diagnoseWebGL(){
   const d={browser:navigator.userAgent||'unknown',webgl2:false,webgl1:false,contextError:'',renderer:'unknown',vendor:'unknown'};
@@ -6025,6 +6067,7 @@ function init3D(){
   }
   E3.tmpV=new THREE.Vector3();
   E3.ok=true;
+  loadAlexModel();
   return true;
 }
 function applyQuality(){
@@ -6355,14 +6398,23 @@ function update3D(dt){
       continue;
     }
   }
-  /* player rig */
+  /* player rig — keep the procedural body as a safe fallback while the real GLB loads. */
   if(!E3.playerRig){
     E3.playerRig=rigHumanoid({cloth:0x3f4735,skin:0x6b5c4c,dark:0x2b3129,gun:true});
     E3.world.add(E3.playerRig);
   }
   if(E3.playerRig.parent!==E3.world)E3.world.add(E3.playerRig);
   const pr=E3.playerRig,pu=pr.userData;
-  pr.visible=!P.hidden&&!P.dead;
+  const alexRoot=E3.alexReal.root;
+  if(alexRoot){
+    if(alexRoot.parent!==E3.world)E3.world.add(alexRoot);
+    alexRoot.position.set(P.x,py,P.y);
+    alexRoot.rotation.y=-(P.modelYaw!=null?P.modelYaw:IN.aim)-Math.PI/2+Math.PI;
+    alexRoot.visible=!P.hidden&&!P.dead;
+    pr.visible=false;
+  }else{
+    pr.visible=!P.hidden&&!P.dead;
+  }
   if(pr.visible){
     /* hide the body only if the camera is pulled uncomfortably close */
     const cd=cam.position.distanceTo?cam.position.distanceTo(pr.position):99;

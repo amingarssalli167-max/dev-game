@@ -72,7 +72,10 @@
     let m;
     if(md.alphaMode==='BLEND')m=new THREE.MeshStandardMaterial({color:new THREE.Color(bc[0],bc[1],bc[2]),transparent:true,opacity:bc[3],side:THREE.DoubleSide});
     else m=new THREE.MeshStandardMaterial({color:new THREE.Color(bc[0],bc[1],bc[2]),opacity:bc[3],transparent:bc[3]<0.999,side:md.doubleSided?THREE.DoubleSide:THREE.FrontSide});
-    if(p.metallicFactor!==undefined)m.metalness=p.metallicFactor;
+    /* Preserve glTF vertex colors when the mesh uses COLOR_0; otherwise
+       Three.js falls back to the material's white base color and the character
+       loses its authored appearance. */
+    if(m.vertexColors!==undefined) m.vertexColors=true;
     if(p.roughnessFactor!==undefined)m.roughness=p.roughnessFactor;
     if(Array.isArray(md.emissiveFactor))m.emissive.setRGB(md.emissiveFactor[0],md.emissiveFactor[1],md.emissiveFactor[2]);
     if(md.normalTexture)m.normalScale=new THREE.Vector2(1,1);
@@ -220,6 +223,7 @@
             const staticMat=new THREE.MeshBasicMaterial({
               color:(sourceMat&&sourceMat.color)?sourceMat.color.clone():new THREE.Color(0xffffff),
               map:(sourceMat&&sourceMat.map)?sourceMat.map:null,
+              vertexColors:!!(sm.geometry&&sm.geometry.getAttribute&&sm.geometry.getAttribute('color')),
               side:THREE.DoubleSide
             });
             staticMat.transparent=false;

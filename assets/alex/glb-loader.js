@@ -83,6 +83,7 @@
     if(ti!==undefined&&textures[ti])m.map=textures[ti];
     const ni=md.normalTexture&&md.normalTexture.index;
     if(ni!==undefined&&textures[ni])m.normalMap=textures[ni];
+    m.name=md.name||('material_'+String(matIndex===undefined?'default':matIndex));
     return m;
   }
   function transformNode(o,n){
@@ -226,6 +227,7 @@
               vertexColors:!!(sm.geometry&&sm.geometry.getAttribute&&sm.geometry.getAttribute('color')),
               side:THREE.DoubleSide
             });
+            staticMat.name=sourceMat&&sourceMat.name?sourceMat.name:'';
             staticMat.transparent=false;
             staticMat.opacity=1;
             staticMat.depthWrite=true;

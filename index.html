@@ -6102,73 +6102,85 @@ if(!isFinite(h)||h<0.01){
       E3.alexReal.error='';
       E3.alexReal.sourceHeight=h;
 
-      /* DIRECT ALEX VISIBILITY TEST: bypass gameplay transforms and lighting. */
+      /* DIRECT ALEX STATIC TEST: render plain Mesh copies only.
+         This deliberately bypasses SkinnedMesh/boneTexture shaders so WebGL 1
+         can prove that the imported GLB geometry itself is renderable. */
       if(alexTestModel){
-        root.visible=true;
-        root.position.set(0,0,0);
-        root.rotation.set(0,Math.PI,0);
+        root.name='ALEX_DIRECT_SOURCE_HIDDEN';
+        root.visible=false;
         root.traverse(function(o){
-          if(!o.isMesh)return;
-          o.visible=true;
-          o.frustumCulled=false;
-          if(o.material){
-            o.material=new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide});
-            o.material.needsUpdate=true;
+          if(o.isMesh){
+            o.visible=false;
+            o.frustumCulled=false;
           }
         });
-        if(root.parent)root.parent.remove(root);
-        E3.scene.add(root);
+
+        const staticGroup=new THREE.Group();
+        staticGroup.name='ALEX_DIRECT_STATIC_TEST';
+        const staticMaterial=new THREE.MeshBasicMaterial({
+          color:0xffffff,
+          side:THREE.DoubleSide,
+          transparent:false,
+          opacity:1,
+          depthWrite:true,
+          depthTest:true,
+          fog:false
+        });
+
+        let staticCount=0;
         root.updateMatrixWorld(true);
-        console.info('[ALEX TEST] DIRECT RENDER TEST ACTIVE', {
-          meshes, skins, verts, sourceHeight:h, scale:scale,
-          worldBox:(function(){const b=new THREE.Box3().setFromObject(root);return {
-            min:b.min.toArray(),max:b.max.toArray(),size:b.getSize(new THREE.Vector3()).toArray()
-          };})(),
-          parent:root.parent&&root.parent.type
+        root.traverse(function(o){
+          if(!o.isSkinnedMesh || !o.geometry) return;
+          const g=o.geometry.clone();
+          o.updateMatrixWorld(true);
+          g.applyMatrix4(o.matrixWorld);
+          g.computeBoundingBox();
+          g.computeBoundingSphere();
+          const m=new THREE.Mesh(g,staticMaterial.clone());
+          m.visible=true;
+          m.frustumCulled=false;
+          m.castShadow=false;
+          m.receiveShadow=false;
+          staticGroup.add(m);
+          staticCount++;
+        });
+
+        staticGroup.position.set(0,0,0);
+        staticGroup.rotation.set(0,0,0);
+        staticGroup.scale.set(1,1,1);
+        E3.scene.add(staticGroup);
+        E3.alexReal.directStaticGroup=staticGroup;
+
+        const sb=new THREE.Box3().setFromObject(staticGroup);
+        const ss=sb.getSize(new THREE.Vector3());
+        const sc=Math.max(ss.y,0.001);
+        const desired=1.75;
+        staticGroup.scale.setScalar(desired/sc);
+        staticGroup.position.x=-((sb.min.x+sb.max.x)*0.5);
+        staticGroup.position.y=-sb.min.y;
+        staticGroup.position.z=-((sb.min.z+sb.max.z)*0.5);
+        staticGroup.updateMatrixWorld(true);
+
+        /* Keep the source SkinnedMesh out of the scene entirely. */
+        const holder=new THREE.Group();
+        holder.name='ALEX_DIRECT_SOURCE_HOLDER';
+        holder.visible=false;
+        holder.add(root);
+
+        E3.camera.position.set(0,0.95,4.2);
+        E3.camera.lookAt(0,0.85,0);
+        E3.camera.updateProjectionMatrix();
+
+        console.info('[ALEX TEST] STATIC NON-SKINNED TEST ACTIVE',{
+          sourceMeshes:meshes,
+          sourceSkins:skins,
+          staticMeshes:staticCount,
+          sourceHeight:h,
+          staticHeight:ss.y,
+          camera:E3.camera.position.toArray()
         });
       }
-       /* ===== DIRECT MODEL VISIBILITY TEST ===== */
-if(alexTestModel){
-  root.name='ALEX_DIRECT_MODEL_TEST';
-  root.visible=true;
 
-  root.traverse(function(o){
-    if(!o.isMesh) return;
-    o.visible=true;
-    o.frustumCulled=false;
-    o.castShadow=false;
-    o.receiveShadow=false;
-
-    if(o.material){
-      o.material.transparent=false;
-      o.material.opacity=1;
-      o.material.depthWrite=true;
-      o.material.depthTest=true;
-      o.material.needsUpdate=true;
-    }
-  });
-
-  /* Remove it from the gameplay world and put it directly in the scene. */
-  if(root.parent) root.parent.remove(root);
-  E3.scene.add(root);
-
-  /* Known fixed test position: directly in front of the camera. */
-  root.position.set(0,0,0);
-  root.rotation.set(0,Math.PI,0);
-  root.scale.setScalar(scale);
-
-  E3.camera.position.set(0,1.6,4);
-  E3.camera.lookAt(0,1.0,0);
-
-  root.updateMatrixWorld(true);
-
-  console.info('[ALEX TEST] DIRECT MODEL TEST ACTIVE', {
-    position:root.position,
-    scale:root.scale,
-    visible:root.visible,
-    parent:root.parent ? root.parent.name || root.parent.type : null
-  });
-}         
       console.info('[ALEX] REAL SKELETON READY:',{
         meshes,skins,verts,sourceHeight:h,scale,
         bones:Object.keys(E3.alexReal.bones).length,

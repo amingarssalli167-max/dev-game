@@ -6100,6 +6100,33 @@ if(!isFinite(h)||h<0.01){
       E3.alexReal.ready=true;
       E3.alexReal.loading=false;
       E3.alexReal.error='';
+      E3.alexReal.sourceHeight=h;
+
+      /* DIRECT ALEX VISIBILITY TEST: bypass gameplay transforms and lighting. */
+      if(alexTestModel){
+        root.visible=true;
+        root.position.set(0,0,0);
+        root.rotation.set(0,Math.PI,0);
+        root.traverse(function(o){
+          if(!o.isMesh)return;
+          o.visible=true;
+          o.frustumCulled=false;
+          if(o.material){
+            o.material=new THREE.MeshBasicMaterial({color:0xffffff,side:THREE.DoubleSide});
+            o.material.needsUpdate=true;
+          }
+        });
+        if(root.parent)root.parent.remove(root);
+        E3.scene.add(root);
+        root.updateMatrixWorld(true);
+        console.info('[ALEX TEST] DIRECT RENDER TEST ACTIVE', {
+          meshes, skins, verts, sourceHeight:h, scale:scale,
+          worldBox:(function(){const b=new THREE.Box3().setFromObject(root);return {
+            min:b.min.toArray(),max:b.max.toArray(),size:b.getSize(new THREE.Vector3()).toArray()
+          };})(),
+          parent:root.parent&&root.parent.type
+        });
+      }
        /* ===== DIRECT MODEL VISIBILITY TEST ===== */
 if(alexTestModel){
   root.name='ALEX_DIRECT_MODEL_TEST';
@@ -6586,27 +6613,28 @@ function update3D(dt){
      Collision/gameplay state remains G.player; the visible body is the imported
      skinned GLB. The procedural humanoid is no longer rendered or animated. */
 const alexRoot=E3.alexReal.root;
-if(alexRoot && new URLSearchParams(location.search).get('testModel') !== '1'){
-  if(new URLSearchParams(location.search).get('testModel') === '1' && E3.alexReal.root){
-  const testRoot=E3.alexReal.root;
-  testRoot.visible=true;
-  testRoot.position.set(0,0,0);
-  testRoot.rotation.set(0,Math.PI,0);
-  testRoot.scale.setScalar(E3.alexReal.height / Math.max(E3.alexReal.sourceHeight || 1,0.001));
-  testRoot.updateMatrixWorld(true);
+const isAlexDirectTest=new URLSearchParams(location.search).get('testModel') === '1';
 
-  if(E3.camera){
-    E3.camera.position.set(0,1.6,4);
-    E3.camera.lookAt(0,1.0,0);
-  }
-}
+if(alexRoot && !isAlexDirectTest){
     if(alexRoot.parent!==E3.world)E3.world.add(alexRoot);
     alexRoot.position.set(P.x,py,P.y);
     alexRoot.rotation.y=-(P.modelYaw!=null?P.modelYaw:IN.aim)-Math.PI/2+Math.PI;
     alexRoot.visible=!P.hidden&&!P.dead;
     updateAlexRigFromANIM((typeof ANIM!=='undefined'&&ANIM.pose)?ANIM.pose:null);
     alexRoot.updateMatrixWorld(true);
+}
+
+if(isAlexDirectTest && alexRoot){
+  alexRoot.visible=true;
+  alexRoot.position.set(0,0,0);
+  alexRoot.rotation.set(0,Math.PI,0);
+  alexRoot.updateMatrixWorld(true);
+  if(E3.camera){
+    E3.camera.position.set(0,1.6,4);
+    E3.camera.lookAt(0,1.0,0);
+    E3.camera.updateProjectionMatrix();
   }
+}
   /* memory layer tint */
   const fogC=E3.scene.fog.color;
   if(G.echo>0.35){

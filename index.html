@@ -6183,6 +6183,58 @@ if(!isFinite(h)||h<0.01){
             depthTest:true,
             fog:false
           });
+
+          /* Real Alex texture bridge for the diagnostic CPU-skinned meshes.
+             The repository contains the authored BaseColor maps for the body,
+             gloves, jacket, jeans, shoes, backpack, hair and teeth. */
+          const texBase='Texture/';
+          const texMap={
+            body:'Body_BaseColor.1001.png',
+            gloves:'Gloves_BaseColor.jpg',
+            jacket:'Jacket_BaseColor.jpg',
+            jeans:'Jeans_BaseColor.jpg',
+            shoes:'Shoes_BaseColor.jpg',
+            backpack:'Backpack_BaseColor.jpg',
+            hair:'HairBrown_Diffuse_2.jpg',
+            teeth:'TeethBaseColor.png',
+            eye:'Eye_BaseColor.png'
+          };
+          if(!window.__ALEX_TEX_CACHE) window.__ALEX_TEX_CACHE={};
+          const textureLoader=window.__ALEX_TEX_LOADER||(window.__ALEX_TEX_LOADER=new THREE.TextureLoader());
+          const sourceName=((sm.name||'')+' '+(sm.material&&sm.material.name||'')+' '+(sm.parent&&sm.parent.name||'')).toLowerCase();
+          let texKey=null;
+          if(/glove/.test(sourceName)) texKey='gloves';
+          else if(/jacket|coat|shirt|upper/.test(sourceName)) texKey='jacket';
+          else if(/jean|pant|trouser|lower|leg/.test(sourceName)) texKey='jeans';
+          else if(/shoe|boot|foot/.test(sourceName)) texKey='shoes';
+          else if(/backpack|bag/.test(sourceName)) texKey='backpack';
+          else if(/hair|brow|headcap/.test(sourceName)) texKey='hair';
+          else if(/teeth|tooth/.test(sourceName)) texKey='teeth';
+          else if(/eye/.test(sourceName)) texKey='eye';
+          else texKey='body';
+
+          const texFile=texMap[texKey];
+          const texUrl=new URL(texBase+texFile,document.baseURI).href;
+          if(!window.__ALEX_TEX_CACHE[texFile]){
+            const t=textureLoader.load(texUrl,
+              function(loaded){
+                loaded.colorSpace=THREE.SRGBColorSpace;
+                loaded.flipY=false;
+                loaded.needsUpdate=true;
+                console.info('[ALEX TEX] loaded',texKey,texFile);
+              },
+              undefined,
+              function(err){ console.warn('[ALEX TEX] failed',texUrl,err); }
+            );
+            t.colorSpace=THREE.SRGBColorSpace;
+            t.flipY=false;
+            window.__ALEX_TEX_CACHE[texFile]=t;
+          }
+          mat.map=window.__ALEX_TEX_CACHE[texFile];
+          mat.color.set(0xffffff);
+          mat.needsUpdate=true;
+          mat.userData={alexTextureKey:texKey,alexTextureFile:texFile};
+
           const mesh=new THREE.Mesh(out,mat);
           mesh.visible=true;
           mesh.frustumCulled=false;

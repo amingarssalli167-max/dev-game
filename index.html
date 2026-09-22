@@ -6102,82 +6102,122 @@ if(!isFinite(h)||h<0.01){
       E3.alexReal.error='';
       E3.alexReal.sourceHeight=h;
 
-      /* DIRECT ALEX STATIC TEST: render plain Mesh copies only.
-         This deliberately bypasses SkinnedMesh/boneTexture shaders so WebGL 1
-         can prove that the imported GLB geometry itself is renderable. */
+      /* DIRECT ALEX CPU-SKIN TEST:
+         WebGL1 cannot compile the current SkinnedMesh bone-texture shader.
+         Bake the real skinned vertices on the CPU instead, producing ordinary
+         Mesh objects that WebGL1 can render. This is only the diagnostic path. */
       if(alexTestModel){
-        root.name='ALEX_DIRECT_SOURCE_HIDDEN';
         root.visible=false;
-        root.traverse(function(o){
-          if(o.isMesh){
-            o.visible=false;
-            o.frustumCulled=false;
-          }
-        });
+        root.traverse(function(o){ if(o.isMesh){o.visible=false;o.frustumCulled=false;} });
 
         const staticGroup=new THREE.Group();
-        staticGroup.name='ALEX_DIRECT_STATIC_TEST';
-        const staticMaterial=new THREE.MeshBasicMaterial({
-          color:0xffffff,
-          side:THREE.DoubleSide,
-          transparent:false,
-          opacity:1,
-          depthWrite:true,
-          depthTest:true,
-          fog:false
-        });
-
+        staticGroup.name='ALEX_CPU_SKIN_TEST';
         let staticCount=0;
+
         root.updateMatrixWorld(true);
-        root.traverse(function(o){
-          if(!o.isSkinnedMesh || !o.geometry) return;
-          const g=o.geometry.clone();
-          o.updateMatrixWorld(true);
-          g.applyMatrix4(o.matrixWorld);
-          g.computeBoundingBox();
-          g.computeBoundingSphere();
-          const m=new THREE.Mesh(g,staticMaterial.clone());
-          m.visible=true;
-          m.frustumCulled=false;
-          m.castShadow=false;
-          m.receiveShadow=false;
-          staticGroup.add(m);
+
+        root.traverse(function(sm){
+          if(!sm.isSkinnedMesh || !sm.geometry || !sm.skeleton) return;
+
+          const src=sm.geometry;
+          const pa=src.getAttribute('position');
+          const si=src.getAttribute('skinIndex');
+          const sw=src.getAttribute('skinWeight');
+          if(!pa||!si||!sw) return;
+
+          sm.skeleton.update();
+
+          const out=new THREE.BufferGeometry();
+          const pos=new Float32Array(pa.count*3);
+          const normalAttr=src.getAttribute('normal');
+          const uvAttr=src.getAttribute('uv');
+          const uv=uvAttr?new Float32Array(uvAttr.array):null;
+
+          const v=new THREE.Vector3();
+          const skinned=new THREE.Vector3();
+          const temp=new THREE.Vector3();
+          const skinMat=new THREE.Matrix4();
+          const bind=sm.bindMatrix;
+          const bindInv=sm.bindMatrixInverse;
+          const bones=sm.skeleton.bones;
+          const inverses=sm.skeleton.boneInverses;
+          const idx=new THREE.Vector4();
+          const wt=new THREE.Vector4();
+
+          for(let i=0;i<pa.count;i++){
+            v.fromBufferAttribute(pa,i).applyMatrix4(bind);
+            skinned.set(0,0,0);
+            idx.fromBufferAttribute(si,i);
+            wt.fromBufferAttribute(sw,i);
+
+            for(let k=0;k<4;k++){
+              const w=wt.getComponent(k);
+              if(w<=0) continue;
+              const bi=idx.getComponent(k)|0;
+              if(!bones[bi]||!inverses[bi]) continue;
+              skinMat.multiplyMatrices(bones[bi].matrixWorld,inverses[bi]);
+              temp.copy(v).applyMatrix4(skinMat);
+              skinned.addScaledVector(temp,w);
+            }
+
+            skinned.applyMatrix4(bindInv);
+            /* Convert from the SkinnedMesh local space into scene space. */
+            skinned.applyMatrix4(sm.matrixWorld);
+            pos[i*3]=skinned.x;
+            pos[i*3+1]=skinned.y;
+            pos[i*3+2]=skinned.z;
+          }
+
+          out.setAttribute('position',new THREE.BufferAttribute(pos,3));
+          if(uv) out.setAttribute('uv',new THREE.BufferAttribute(uv,2));
+          out.computeVertexNormals();
+          out.computeBoundingBox();
+          out.computeBoundingSphere();
+
+          const mat=new THREE.MeshBasicMaterial({
+            color:0xffffff,
+            side:THREE.DoubleSide,
+            transparent:false,
+            opacity:1,
+            depthWrite:true,
+            depthTest:true,
+            fog:false
+          });
+          const mesh=new THREE.Mesh(out,mat);
+          mesh.visible=true;
+          mesh.frustumCulled=false;
+          staticGroup.add(mesh);
           staticCount++;
         });
 
-        staticGroup.position.set(0,0,0);
-        staticGroup.rotation.set(0,0,0);
-        staticGroup.scale.set(1,1,1);
         E3.scene.add(staticGroup);
-        E3.alexReal.directStaticGroup=staticGroup;
 
-        const sb=new THREE.Box3().setFromObject(staticGroup);
-        const ss=sb.getSize(new THREE.Vector3());
-        const sc=Math.max(ss.y,0.001);
-        const desired=1.75;
-        staticGroup.scale.setScalar(desired/sc);
-        staticGroup.position.x=-((sb.min.x+sb.max.x)*0.5);
-        staticGroup.position.y=-sb.min.y;
-        staticGroup.position.z=-((sb.min.z+sb.max.z)*0.5);
+        const box=new THREE.Box3().setFromObject(staticGroup);
+        const size=box.getSize(new THREE.Vector3());
+        const center=box.getCenter(new THREE.Vector3());
+        const height=Math.max(size.y,0.001);
+        const scale=1.75/height;
+
+        staticGroup.scale.setScalar(scale);
+        staticGroup.position.set(
+          -center.x*scale,
+          -box.min.y*scale,
+          -center.z*scale
+        );
         staticGroup.updateMatrixWorld(true);
-
-        /* Keep the source SkinnedMesh out of the scene entirely. */
-        const holder=new THREE.Group();
-        holder.name='ALEX_DIRECT_SOURCE_HOLDER';
-        holder.visible=false;
-        holder.add(root);
+        E3.alexReal.directStaticGroup=staticGroup;
 
         E3.camera.position.set(0,0.95,4.2);
         E3.camera.lookAt(0,0.85,0);
         E3.camera.updateProjectionMatrix();
 
-        console.info('[ALEX TEST] STATIC NON-SKINNED TEST ACTIVE',{
+        console.info('[ALEX TEST] CPU-SKIN STATIC MODEL ACTIVE',{
           sourceMeshes:meshes,
           sourceSkins:skins,
-          staticMeshes:staticCount,
-          sourceHeight:h,
-          staticHeight:ss.y,
-          camera:E3.camera.position.toArray()
+          renderedMeshes:staticCount,
+          bakedHeight:height,
+          scale:scale,
+          bounds:size.toArray()
         });
       }
 

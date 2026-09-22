@@ -232,41 +232,20 @@
             staticMat.opacity=1;
             staticMat.depthWrite=true;
             staticMat.toneMapped=false;
-            const staticMesh=new THREE.Mesh(sm.geometry,staticMat);
-            staticMesh.name='Alex_BindPose_Visible';
-            staticMesh.castShadow=true;
-            staticMesh.receiveShadow=true;
-            staticMesh.frustumCulled=false;
-            staticMesh.renderOrder=5;
-            staticMesh.userData.alexBindPoseVisible=true;
-            staticMesh.userData.sourceSkinnedMesh=sm;
-            staticMesh.userData.glbNode=i;
-            staticMesh.visible=true;
-
-            /* IMPORTANT: never parent the raw visibility copy to a Bone.
-               Bone transforms can move/collapse it when the custom skin
-               hierarchy is evaluated. Freeze the exact bind-pose world matrix
-               and attach the copy directly to the GLB root. */
-            root.updateMatrixWorld(true);
+            /* Bake the mesh-node world transform into a private geometry copy.
+               This avoids relying on Bone/SkinnedMesh parent transforms for the
+               visibility fallback. The copy is then a plain Mesh at the GLB root,
+               so it cannot disappear when the imported skeleton is updated. */
+            const bakedGeometry=sm.geometry.clone();
             sm.updateMatrixWorld(true);
-            /* Use a normal transform hierarchy for the frozen copy.
-               Decomposing the bind-pose world matrix is more reliable than
-               manually freezing matrixWorld because the parent GLB root is
-               later scaled/rotated by the gameplay layer. */
-            const frozenPos=new THREE.Vector3();
-            const frozenQuat=new THREE.Quaternion();
-            const frozenScale=new THREE.Vector3();
-            sm.matrixWorld.decompose(frozenPos,frozenQuat,frozenScale);
-            staticMesh.matrixAutoUpdate=true;
-            staticMesh.position.copy(frozenPos);
-            staticMesh.quaternion.copy(frozenQuat);
-            staticMesh.scale.copy(frozenScale);
-            sm.visible=false;
-            root.add(staticMesh);
-            staticMesh.visible=true;
-            staticMesh.updateMatrixWorld(true);
-
-            const testBox=new THREE.Box3().setFromObject(staticMesh);
+            bakedGeometry.applyMatrix4(sm.matrixWorld);
+            bakedGeometry.computeBoundingBox();
+            bakedGeometry.computeBoundingSphere();
+            const staticMesh=new THREE.Mesh(bakedGeometry,staticMat);
+            staticMesh.position.set(0,0,0);
+            staticMesh.quaternion.identity();
+            staticMesh.scale.set(1,1,1);
+            staticMesh.matrixAutoUpdate=true;            const testBox=new THREE.Box3().setFromObject(staticMesh);
             const testSize=testBox.getSize(new THREE.Vector3());
             console.info('[GLB] visible bind-pose mesh',i,'height=',testSize.y,'skinBones=',skeleton.bones.length);
           }

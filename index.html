@@ -6026,6 +6026,51 @@ function updateAlexRigFromANIM(ap){
      controller remains responsible for the actual collider height. */
   A.root.updateMatrixWorld(true);
 }
+/* ---------------- Alex external texture bridge ---------------- */
+const ALEX_EXTERNAL_TEX_MAP={
+  Head:"Body_BaseColor.1001.png",
+  Body2:"Body_BaseColor.1002.png",
+  Arms:"Body_BaseColor.1003.png",
+  Backpack2:"Backpack_BaseColor.jpg",
+  Jacket1:"Jacket_BaseColor.jpg",
+  Jeans1:"Jeans_BaseColor.jpg",
+  Shoes1:"Shoes_BaseColor.jpg",
+  Hair3:"HairBrown_Diffuse_2.jpg",
+  Gloves1:"Gloves_BaseColor.jpg",
+  Eye:"Eye_BaseColor.png",
+  Brows_Leashes:"Eyebrows_BaseColor.jpg",
+  Mouth:"TeethBaseColor.png"
+};
+const ALEX_EXTERNAL_TEX_CACHE={};
+const ALEX_EXTERNAL_TEX_LOADER=new THREE.TextureLoader();
+function applyAlexExternalTexture(root,materialName,texture){
+  if(!root||!texture)return;
+  texture.colorSpace=THREE.SRGBColorSpace;
+  texture.needsUpdate=true;
+  root.traverse(function(o){
+    if(!o.isMesh||!o.material)return;
+    const mats=Array.isArray(o.material)?o.material:[o.material];
+    mats.forEach(function(m){
+      if(m&&m.name===materialName){
+        m.map=texture;
+        m.needsUpdate=true;
+      }
+    });
+  });
+}
+function loadAlexExternalTextures(root){
+  Object.keys(ALEX_EXTERNAL_TEX_MAP).forEach(function(materialName){
+    const path='./Texture/'+ALEX_EXTERNAL_TEX_MAP[materialName];
+    ALEX_EXTERNAL_TEX_LOADER.load(path,function(texture){
+      ALEX_EXTERNAL_TEX_CACHE[materialName]=texture;
+      applyAlexExternalTexture(root,materialName,texture);
+      console.info('[ALEX] external texture applied:',materialName,ALEX_EXTERNAL_TEX_MAP[materialName]);
+    },undefined,function(err){
+      console.warn('[ALEX] external texture failed:',materialName,path,err);
+    });
+  });
+}
+
 /* ---------------- real Alex model ---------------- */
 function loadAlexModel(){
   if(E3.alexReal.loading||E3.alexReal.ready)return;
@@ -6040,6 +6085,7 @@ function loadAlexModel(){
   LocalGLBLoader.load('./assets/alex/Survival_Character.glb',function(gltf){
     try{
       const root=gltf.scene;
+      loadAlexExternalTextures(root);
       let meshes=0,skins=0,verts=0;
       root.traverse(function(o){
         if(o.isMesh){

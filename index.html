@@ -6057,10 +6057,28 @@ function loadAlexModel(){
         }
       });
       if(!meshes)throw new Error('GLB parsed but contains 0 visible meshes');
-      const box=new THREE.Box3().setFromObject(root);
-      const size=box.getSize(new THREE.Vector3());
-      const h=Math.max(size.y,0.001);
-      if(!isFinite(h)||h<0.01)throw new Error('GLB has invalid model height: '+h);
+const box=new THREE.Box3();
+
+root.traverse(function(o){
+  if(!o.isMesh || !o.geometry) return;
+
+  const g=o.geometry;
+
+  if(g.boundingBox===null) g.computeBoundingBox();
+
+  if(g.boundingBox){
+    const b=g.boundingBox.clone();
+    b.applyMatrix4(o.matrixWorld);
+    box.union(b);
+  }
+});
+
+const size=box.getSize(new THREE.Vector3());
+const h=Math.max(size.y,0.001);
+
+if(!isFinite(h)||h<0.01){
+  throw new Error('GLB has invalid model height: '+h);
+}
       const scale=E3.alexReal.height/h;
       root.name='Alex_Real_SurvivalCharacter';
       root.scale.setScalar(scale);

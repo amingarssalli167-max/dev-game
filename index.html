@@ -6035,9 +6035,11 @@ function loadAlexModel(){
     return;
   }
   E3.alexReal.loading=true;
-  E3.alexReal.error='Loading Survival_Character.glb…';
-  console.info('[ALEX] requesting real model…');
-  LocalGLBLoader.load('./assets/alex/Survival_Character.glb',function(gltf){
+  const alexTestModel = new URLSearchParams(location.search).get('testModel') === '1';
+  const alexModelUrl = alexTestModel ? 'https://threejs.org/examples/models/gltf/Soldier.glb' : './assets/alex/Survival_Character.glb';
+  E3.alexReal.error=alexTestModel ? 'Loading external Soldier.glb test…' : 'Loading Survival_Character.glb…';
+  console.info('[ALEX] requesting model:',alexModelUrl);
+  LocalGLBLoader.load(alexModelUrl,function(gltf){
     try{
       const root=gltf.scene;
       let meshes=0,skins=0,verts=0;

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CHERNOBYL: ECHOES OF ZERO — Playable Prototype</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050608;color:#eee;font-family:Arial,sans-serif}
+#hud{position:fixed;inset:0;pointer-events:none;z-index:5}
+#title{position:absolute;left:22px;top:18px;font-weight:700;letter-spacing:2px;text-shadow:0 2px 8px #000}
+#status{position:absolute;left:22px;bottom:22px;background:rgba(0,0,0,.48);padding:10px 14px;border:1px solid #ffffff22;border-radius:8px;max-width:430px}
+#cross{position:absolute;left:50%;top:50%;width:8px;height:8px;border:1px solid #fff8;border-radius:50%;transform:translate(-50%,-50%)}
+#hint{position:absolute;left:50%;bottom:90px;transform:translateX(-50%);background:#000b;padding:10px 16px;border-radius:7px;opacity:0;transition:.2s}
+#fade{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;z-index:9;transition:opacity .5s}
+#start{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(circle at center,#1b2020,#030405 70%);z-index:10}
+.panel{max-width:560px;padding:36px;text-align:center;background:#080b0dcc;border:1px solid #ffffff20;border-radius:14px;box-shadow:0 20px 80px #000}
+button{padding:12px 26px;background:#c8d0c7;color:#101210;border:0;border-radius:7px;font-weight:700;cursor:pointer}
+small{opacity:.65}
+</style></head>
+<body>
+<div id="start"><div class="panel"><h1>CHERNOBYL: ECHOES OF ZERO</h1><p>Playable Prototype — The Fall</p><p><small>WASD = move · Mouse = look · E = interact · Shift = run</small></p><button id="startBtn">ENTER PRIPYAT</button></div></div>
+<div id="hud"><div id="title">ECHOES OF ZERO</div><div id="cross"></div><div id="hint"></div><div id="status">Find the old radio.</div></div><div id="fade"></div>
+<script src="src/three.min.js"></script><script src="assets/alex/glb-loader.js"></script>
+<script>
+(function(){
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x05080a); scene.fog=new THREE.FogExp2(0x071014,.018);
+const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.05,900);
+const renderer=new THREE.WebGLRenderer({antialias:true}); renderer.setPixelRatio(Math.min(devicePixelRatio,1.5)); renderer.setSize(innerWidth,innerHeight); renderer.outputColorSpace=THREE.SRGBColorSpace; document.body.appendChild(renderer.domElement);
+const hemi=new THREE.HemisphereLight(0x82959d,0x11100e,.7); scene.add(hemi);
+const moon=new THREE.DirectionalLight(0xb8c7d4,1.1); moon.position.set(-80,100,40); scene.add(moon);
+const player=new THREE.Group(); player.position.set(0,1,24); scene.add(player);
+let yaw=0,pitch=-.08,locked=false,running=false; const keys={}; let alex=null;
+const hint=document.getElementById('hint'),status=document.getElementById('status'),fade=document.getElementById('fade');
+function box(x,y,z,px,py,pz,c){const m=new THREE.Mesh(new THREE.BoxGeometry(x,y,z),new THREE.MeshStandardMaterial({color:c,roughness:.9}));m.position.set(px,py,pz);scene.add(m);return m}
+const ground=box(180,.4,180,0,-.2,0,0x202523);
+for(let i=0;i<45;i++){let x=(i*37%150)-75,z=(i*71%150)-75;if(Math.abs(x)<18&&Math.abs(z)<35)continue;box(2+((i*13)%4),2+(i%4),2+((i*9)%4),x,1,z,0x1c211f)}
+// street/building
+box(32,12,2,0,6,-18,0x343b38); box(2,12,34,-16,6,-1,0x303734); box(2,12,34,16,6,-1,0x303734);
+for(let x=-12;x<=12;x+=6)for(let y=3;y<=9;y+=3)box(2,1.4,.15,x,y,-16.9,0x17201f);
+for(let z=-12;z<=12;z+=6)for(let y=3;y<=9;y+=3){box(.15,1.4,2,z?15.9:15.9,y,z,0x17201f);box(.15,1.4,2,-15.9,y,z,0x17201f)}
+// doorway and radio room
+box(5,7,1,0,3.5,-16.8,0x202522); box(3.4,6,.3,0,3,-16.25,0x111513);
+const radio=box(.9,.55,.65,5,1,-8,0x65706a); radio.name='radio';
+const note=box(.5,.06,.7,-6,1,-6,0xbbb19a); note.name='note';
+const redLamp=new THREE.PointLight(0xff3b30,0,9);redLamp.position.set(5,2,-8);scene.add(redLamp);
+// simple companion shapes
+const rex=new THREE.Group();const rb=new THREE.Mesh(new THREE.BoxGeometry(1.2,.7,1.8),new THREE.MeshStandardMaterial({color:0x5b4635}));rb.position.y=.55;rex.add(rb);const rh=new THREE.Mesh(new THREE.BoxGeometry(.9,.65,.9),rb.material);rh.position.set(0,.9,-.9);rex.add(rh);rex.position.set(-3,.05,15);scene.add(rex);
+const nika=new THREE.Group();const nb=new THREE.Mesh(new THREE.CapsuleGeometry(.38,1.1,4,8),new THREE.MeshStandardMaterial({color:0x34405a}));nb.position.y=.9;nika.add(nb);nika.position.set(7,0,-5);nika.visible=false;scene.add(nika);
+let haveNote=false,radioOn=false,phase=0,near=null;
+if(window.LocalGLBLoader)LocalGLBLoader.load('assets/alex/Survival_Character.glb',g=>{alex=g.scene;alex.scale.setScalar(.95);alex.position.set(0,0,0);player.add(alex);alex.traverse(o=>{if(o.isMesh){o.frustumCulled=false}});},e=>console.warn(e));
+function dist(a,b){return a.distanceTo(b)}
+function interact(){if(!near)return;
+ if(near==='radio'&&!radioOn){radioOn=true;redLamp.intensity=2.2;status.textContent='The radio is alive. A voice says: “School. Block C.”';haveNote=false;phase=1;return}
+ if(near==='note'&&!haveNote){haveNote=true;status.textContent='Old note: “The symbols on the school wall point to the generator.”';phase=2;return}
+ if(near==='door'&&phase>=2){nika.visible=true;status.textContent='A child is standing beyond the doorway. She looks at Alex. “You came back.”';phase=3;return}
+ if(near==='door'){status.textContent='Locked. Something is written on the wall: C — 7 — 4.'}
+}
+function updateNear(){near=null;const p=player.position;
+ if(dist(p,new THREE.Vector3(5,1,-8))<3)near='radio';
+ else if(dist(p,new THREE.Vector3(-6,1,-6))<3)near='note';
+ else if(dist(p,new THREE.Vector3(0,1,-15))<3)near='door';
+ if(near){hint.textContent='E  •  INTERACT';hint.style.opacity=1}else hint.style.opacity=0;
+}
+addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='KeyE')interact();if(e.code==='ShiftLeft'||e.code==='ShiftRight')running=true});
+addEventListener('keyup',e=>{keys[e.code]=false;if(e.code==='ShiftLeft'||e.code==='ShiftRight')running=false});
+renderer.domElement.addEventListener('click',()=>renderer.domElement.requestPointerLock());
+document.addEventListener('pointerlockchange',()=>locked=document.pointerLockElement===renderer.domElement);
+document.addEventListener('mousemove',e=>{if(!locked)return;yaw-=e.movementX*.0022;pitch-=e.movementY*.0016;pitch=Math.max(-.65,Math.min(.35,pitch));});
+document.getElementById('startBtn').onclick=()=>{document.getElementById('start').style.display='none';renderer.domElement.requestPointerLock();};
+function loop(t){requestAnimationFrame(loop);const dt=Math.min(.033,(t-(loop.last||t))/1000);loop.last=t;
+ let f=(keys.KeyW?1:0)-(keys.KeyS?1:0),s=(keys.KeyD?1:0)-(keys.KeyA?1:0);const len=Math.hypot(f,s)||1;f/=len;s/=len;const speed=running?5.2:2.8;
+ const dir=new THREE.Vector3(Math.sin(yaw),0,Math.cos(yaw));const side=new THREE.Vector3(Math.cos(yaw),0,-Math.sin(yaw));
+ player.position.addScaledVector(dir,f*speed*dt);player.position.addScaledVector(side,s*speed*dt);
+ player.position.x=Math.max(-13.5,Math.min(13.5,player.position.x));player.position.z=Math.max(-30,Math.min(34,player.position.z));
+ rex.position.x+=(player.position.x-3-rex.position.x)*dt*.7;rex.position.z+=(player.position.z+2-rex.position.z)*dt*.7;
+ const cp=new THREE.Vector3(player.position.x+Math.sin(yaw+0.35)*4.5,player.position.y+2.3,player.position.z+Math.cos(yaw+0.35)*4.5);
+ camera.position.lerp(cp,1-Math.pow(.001,dt));const look=new THREE.Vector3(player.position.x,player.position.y+1.45,player.position.z);look.x+=Math.sin(yaw)*2;look.z+=Math.cos(yaw)*2;look.y+=pitch*2;camera.lookAt(look);
+ updateNear(); if(phase>=1&&Math.random()<dt*.018){fade.style.opacity=.08;setTimeout(()=>fade.style.opacity=0,120)}
+ if(nika.visible){nika.position.x=player.position.x+4;nika.position.z=player.position.z-4;}
+ renderer.render(scene,camera);}
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+loop(0);
+})();
+</script></body></html>
